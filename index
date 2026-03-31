@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ruleta virtual</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .app {
+      width: 95%;
+      max-width: 900px;
+      background: #111827;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .top {
+      display: grid;
+      grid-template-columns: 1fr 420px;
+      gap: 24px;
+      align-items: center;
+    }
+
+    .panel {
+      background: #1f2937;
+      padding: 16px;
+      border-radius: 12px;
+    }
+
+    .saldo {
+      font-size: 1.2rem;
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      margin-top: 10px;
+      margin-bottom: 6px;
+    }
+
+    input, select, button {
+      width: 100%;
+      padding: 10px;
+      border-radius: 10px;
+      border: none;
+      font-size: 1rem;
+      margin-bottom: 12px;
+    }
+
+    button {
+      background: #10b981;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #059669;
+    }
+
+    canvas {
+      background: white;
+      border-radius: 50%;
+      display: block;
+      margin: 0 auto;
+    }
+
+    .resultado {
+      margin-top: 12px;
+      text-align: center;
+      font-size: 1.1rem;
+      min-height: 28px;
+    }
+
+    .historial {
+      margin-top: 20px;
+      font-size: 0.95rem;
+    }
+
+    .flecha {
+      width: 0;
+      height: 0;
+      border-left: 18px solid transparent;
+      border-right: 18px solid transparent;
+      border-top: 30px solid gold;
+      margin: 0 auto -10px auto;
+      position: relative;
+      z-index: 2;
+    }
+
+    @media (max-width: 800px) {
+      .top {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>Ruleta virtual con dinero ficticio</h1>
+
+    <div class="top">
+      <div class="panel">
+        <div class="saldo">Saldo: <span id="saldo">1000</span> monedas</div>
+
+        <label for="tipoApuesta">Tipo de apuesta</label>
+        <select id="tipoApuesta">
+          <option value="rojo">Rojo</option>
+          <option value="negro">Negro</option>
+          <option value="verde">Verde (0)</option>
+        </select>
+
+        <label for="cantidad">Cantidad a apostar</label>
+        <input type="number" id="cantidad" min="1" value="50" />
+
+        <button id="girarBtn">Girar ruleta</button>
+
+        <div class="resultado" id="resultado"></div>
+
+        <div class="historial">
+          <strong>Últimos resultados:</strong>
+          <div id="historial"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="flecha"></div>
+        <canvas id="ruleta" width="420" height="420"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("ruleta");
+    const ctx = canvas.getContext("2d");
+
+    const saldoEl = document.getElementById("saldo");
+    const resultadoEl = document.getElementById("resultado");
+    const historialEl = document.getElementById("historial");
+    const girarBtn = document.getElementById("girarBtn");
+    const tipoApuestaEl = document.getElementById("tipoApuesta");
+    const cantidadEl = document.getElementById("cantidad");
+
+    let saldo = 1000;
+    let anguloActual = 0;
+    let girando = false;
+    let historial = [];
+
+    const sectores = [
+      { numero: 0, color: "green", etiqueta: "0" },
+      { numero: 1, color: "red", etiqueta: "1" },
+      { numero: 2, color: "black", etiqueta: "2" },
+      { numero: 3, color: "red", etiqueta: "3" },
+      { numero: 4, color: "black", etiqueta: "4" },
+      { numero: 5, color: "red", etiqueta: "5" },
+      { numero: 6, color: "black", etiqueta: "6" },
+      { numero: 7, color: "red", etiqueta: "7" },
+      { numero: 8, color: "black", etiqueta: "8" },
+      { numero: 9, color: "red", etiqueta: "9" },
+      { numero: 10, color: "black", etiqueta: "10" },
+      { numero: 11, color: "red", etiqueta: "11" },
+      { numero: 12, color: "black", etiqueta: "12" }
+    ];
+
+    const totalSectores = sectores.length;
+    const arc = (Math.PI * 2) / totalSectores;
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    const radioExterior = 180;
+    const radioInterior = 65;
+    const radioTexto = 120;
+
+    function dibujarRuleta() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (let i = 0; i < totalSectores; i++) {
+        const angulo = anguloActual + i * arc;
+        const sector = sectores[i];
+
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, radioExterior, angulo, angulo + arc);
+        ctx.closePath();
+        ctx.fillStyle = sector.color;
+        ctx.fill();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.save();
+        ctx.translate(
+          cx + Math.cos(angulo + arc / 2) * radioTexto,
+          cy + Math.sin(angulo + arc / 2) * radioTexto
+        );
+        ctx.rotate(angulo + arc / 2 + Math.PI / 2);
+        ctx.fillStyle = "white";
+        ctx.font = "bold 18px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText(sector.etiqueta, 0, 0);
+        ctx.restore();
+      }
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, radioInterior, 0, Math.PI * 2);
+      ctx.fillStyle = "#111827";
+      ctx.fill();
+      ctx.strokeStyle = "white";
+      ctx.stroke();
+    }
+
+    function actualizarUI() {
+      saldoEl.textContent = saldo;
+      historialEl.innerHTML = historial.slice(-8).reverse().join("<br>");
+    }
+
+    function obtenerSectorGanador() {
+      const anguloFlecha = (Math.PI * 3) / 2;
+      let anguloNormalizado = (anguloFlecha - anguloActual) % (Math.PI * 2);
+
+      if (anguloNormalizado < 0) {
+        anguloNormalizado += Math.PI * 2;
+      }
+
+      const index = Math.floor(anguloNormalizado / arc) % totalSectores;
+      return sectores[index];
+    }
+
+    function resolverApuesta(ganador, apuesta, cantidad) {
+      let premio = 0;
+      let acierto = false;
+
+      if (apuesta === "rojo" && ganador.color === "red") {
+        premio = cantidad * 2;
+        acierto = true;
+      } else if (apuesta === "negro" && ganador.color === "black") {
+        premio = cantidad * 2;
+        acierto = true;
+      } else if (apuesta === "verde" && ganador.color === "green") {
+        premio = cantidad * 14;
+        acierto = true;
+      }
+
+      if (acierto) {
+        saldo += premio;
+        resultadoEl.textContent = `Ha salido ${ganador.numero} (${ganador.color}). Ganaste ${premio} monedas.`;
+      } else {
+        resultadoEl.textContent = `Ha salido ${ganador.numero} (${ganador.color}). Perdiste ${cantidad} monedas.`;
+      }
+
+      historial.push(`Número ${ganador.numero} - ${ganador.color}`);
+      actualizarUI();
+    }
+
+    function girarRuleta() {
+      if (girando) return;
+
+      const cantidad = parseInt(cantidadEl.value);
+      const apuesta = tipoApuestaEl.value;
+
+      if (!cantidad || cantidad <= 0) {
+        resultadoEl.textContent = "Introduce una cantidad válida.";
+        return;
+      }
+
+      if (cantidad > saldo) {
+        resultadoEl.textContent = "No tienes saldo suficiente.";
+        return;
+      }
+
+      saldo -= cantidad;
+      actualizarUI();
+      resultadoEl.textContent = "Girando...";
+      girando = true;
+      girarBtn.disabled = true;
+
+      const vueltas = 6 + Math.random() * 4;
+      const anguloExtra = Math.random() * Math.PI * 2;
+      const anguloFinal = anguloActual + vueltas * Math.PI * 2 + anguloExtra;
+      const duracion = 4000;
+      const inicio = performance.now();
+      const anguloInicio = anguloActual;
+
+      function animar(tiempo) {
+        const transcurrido = tiempo - inicio;
+        const progreso = Math.min(transcurrido / duracion, 1);
+
+        const easeOut = 1 - Math.pow(1 - progreso, 3);
+        anguloActual = anguloInicio + (anguloFinal - anguloInicio) * easeOut;
+
+        dibujarRuleta();
+
+        if (progreso < 1) {
+          requestAnimationFrame(animar);
+        } else {
+          anguloActual = anguloFinal % (Math.PI * 2);
+          dibujarRuleta();
+
+          const ganador = obtenerSectorGanador();
+          resolverApuesta(ganador, apuesta, cantidad);
+
+          girando = false;
+          girarBtn.disabled = false;
+        }
+      }
+
+      requestAnimationFrame(animar);
+    }
+
+    girarBtn.addEventListener("click", girarRuleta);
+
+    dibujarRuleta();
+    actualizarUI();
+  </script>
+</body>
+</html>
